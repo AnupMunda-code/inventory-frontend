@@ -1,0 +1,778 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import {
+  Box,
+  TextField,
+  Button,
+  Typography,
+  Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  FormLabel,
+  Card,
+  CardContent,
+  Alert,
+  CircularProgress,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+} from "@mui/material";
+import DeleteIcon from '@mui/icons-material/Delete';
+import CloseIcon from '@mui/icons-material/Close';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
+import { fetchStaffById, updateStaff, fetchWarehouses } from "@/lib/staffApi";
+
+const DEPARTMENTS = ['Warehouse', 'Sales', 'Purchase', 'Finance', 'IT', 'HR', 'Administration', 'Support', 'Maintenance', 'Security', 'Housekeeping'];
+const ROLES = ['Manager', 'Supervisor', 'Operator', 'Admin'];
+const BRANCHES = ['Head Office', 'Delhi Branch', 'Mumbai Branch', 'Bangalore Branch', 'Chennai Branch', 'Kolkata Branch'];
+
+const DocumentUpload = ({ label, value, onChange, fieldName }) => {
+  const [preview, setPreview] = useState(null);
+  const [fileName, setFileName] = useState('');
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [modalContentUrl, setModalContentUrl] = useState(null);
+
+  useEffect(() => {
+    if (value && typeof value === 'string') {
+      const name = value.split('/').pop() || value;
+      setFileName(name);
+      const isImage = name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+      const isUrlOrPath = value.startsWith('http') || value.startsWith('/') || value.startsWith('data:');
+      if (isImage && isUrlOrPath) {
+        setPreview(value);
+      } else {
+        setPreview(null);
+      }
+    } else if (value === null || value === '') {
+      setPreview(null);
+      setFileName('');
+    }
+  }, [value]);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFileName(file.name);
+      onChange(file);
+
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPreview(reader.result);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setPreview(null);
+      }
+    }
+  };
+
+  const handleClear = () => {
+    setPreview(null);
+    setFileName('');
+    onChange(null);
+  };
+
+  const handleView = () => {
+    if (preview) {
+      setModalContentUrl({ type: 'image', url: preview });
+      setViewModalOpen(true);
+    } else if (value && typeof value === 'string') {
+      const isUrlOrPath = value.startsWith('http') || value.startsWith('/') || value.startsWith('data:');
+      const name = (value.split('/').pop() || value).toLowerCase();
+      const isPdf = name.endsWith('.pdf');
+      const isImage = name.match(/\.(jpg|jpeg|png|gif|webp)$/);
+      if (isUrlOrPath && (isPdf || isImage)) {
+        setModalContentUrl({ type: isPdf ? 'pdf' : 'image', url: value });
+        setViewModalOpen(true);
+      } else {
+        setModalContentUrl({ type: 'filename', url: null, name: value.split('/').pop() || value });
+        setViewModalOpen(true);
+      }
+    } else if (value && typeof value === 'object' && value instanceof File) {
+      if (value.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setModalContentUrl({ type: 'image', url: reader.result });
+          setViewModalOpen(true);
+        };
+        reader.readAsDataURL(value);
+      } else if (value.type === 'application/pdf') {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setModalContentUrl({ type: 'pdf', url: reader.result });
+          setViewModalOpen(true);
+        };
+        reader.readAsDataURL(value);
+      } else {
+        setModalContentUrl({ type: 'filename', url: null, name: value.name });
+        setViewModalOpen(true);
+      }
+    }
+  };
+
+  const handleCloseModal = () => {
+    setViewModalOpen(false);
+    setModalContentUrl(null);
+  };
+
+  return (
+    <Box sx={{ marginBottom: 2 }}>
+      <Typography variant="body2" sx={{ marginBottom: 1, fontWeight: 'bold' }}>
+        {label}
+      </Typography>
+      
+      {/* File Input */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, marginBottom: 1 }}>
+        <input
+          type="file"
+          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+          onChange={handleFileChange}
+          style={{ 
+            width: '100%',
+            padding: '8px',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            backgroundColor: '#fff'
+          }}
+          id={`file-${fieldName}`}
+        />
+      </Box>
+
+      {/* File Info and Actions */}
+      {(fileName || value) && (
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1, 
+          padding: 1,
+          backgroundColor: '#f5f5f5',
+          borderRadius: 1,
+          marginTop: 1
+        }}>
+          {preview ? (
+            <Box
+              component="img"
+              src={preview}
+              alt="Preview"
+              sx={{
+                width: 60,
+                height: 60,
+                objectFit: 'cover',
+                borderRadius: 1,
+                border: '1px solid #ddd'
+              }}
+            />
+          ) : (
+            <Box
+              sx={{
+                width: 60,
+                height: 60,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 1,
+                border: '1px solid #ddd',
+                backgroundColor: '#e0e0e0',
+                color: '#666'
+              }}
+            >
+              {(fileName || (typeof value === 'string' && value) || '').toLowerCase().endsWith('.pdf') ? (
+                <PictureAsPdfIcon sx={{ fontSize: 28 }} />
+              ) : (
+                <InsertDriveFileIcon sx={{ fontSize: 28 }} />
+              )}
+            </Box>
+          )}
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="caption" color="textSecondary" sx={{ wordBreak: 'break-all' }}>
+              {fileName || (value && typeof value === 'string' ? value.split('/').pop() : 'File attached')}
+            </Typography>
+          </Box>
+          <IconButton 
+            size="small" 
+            color="primary" 
+            onClick={handleView}
+            title="View document"
+          >
+            <VisibilityIcon fontSize="small" />
+          </IconButton>
+          <IconButton 
+            size="small" 
+            color="error" 
+            onClick={handleClear}
+            title="Remove file"
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      )}
+
+      {!fileName && !value && (
+        <Typography variant="caption" color="textSecondary">
+          No file chosen
+        </Typography>
+      )}
+
+      {/* View document modal */}
+      <Dialog
+        open={viewModalOpen}
+        onClose={handleCloseModal}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>{label}</span>
+          <IconButton size="small" onClick={handleCloseModal} aria-label="close">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 0, minHeight: 400, backgroundColor: '#fafafa' }}>
+          {modalContentUrl?.type === 'image' && modalContentUrl.url && (
+            <Box
+              component="img"
+              src={modalContentUrl.url}
+              alt="Document"
+              sx={{
+                width: '100%',
+                maxHeight: '70vh',
+                objectFit: 'contain',
+                display: 'block',
+                margin: '0 auto',
+              }}
+            />
+          )}
+          {modalContentUrl?.type === 'pdf' && modalContentUrl.url && (
+            <Box
+              component="iframe"
+              src={modalContentUrl.url}
+              title="Document"
+              sx={{
+                width: '100%',
+                height: '70vh',
+                minHeight: 400,
+                border: 'none',
+              }}
+            />
+          )}
+          {modalContentUrl?.type === 'filename' && (
+            <Box sx={{ p: 3, textAlign: 'center' }}>
+              <InsertDriveFileIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+              <Typography variant="h6" gutterBottom>
+                {modalContentUrl.name || 'Document'}
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                Preview is not available for this file. The document is stored as a reference.
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseModal} color="primary" variant="contained">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+};
+
+const EditStaff = () => {
+  const params = useParams();
+  const router = useRouter();
+  const [warehouses, setWarehouses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    staffName: '',
+    gender: 'Male',
+    dob: '',
+    mobileNo: '',
+    emailId: '',
+    qualification: '',
+    experience: '',
+    address: '',
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    district: '',
+    pinCode: '',
+    state: '',
+    branchName: '',
+    designation: '',
+    department: '',
+    role: 'Operator',
+    warehouse: '',
+    salary: '',
+    joiningDate: '',
+    resumeCertificate: '',
+    highestQualificationCertificate: '',
+    panCard: '',
+    aadharCard: '',
+    accountHolderName: '',
+    accountNumber: '',
+    bankName: '',
+    ifscCode: '',
+    bankBranch: '',
+    branchLocation: ''
+  });
+
+  useEffect(() => {
+    fetchWarehouses().then(setWarehouses).catch(() => setWarehouses([]));
+  }, []);
+
+  useEffect(() => {
+    if (!params?.id) return;
+    setLoading(true);
+    fetchStaffById(params.id)
+      .then((data) => {
+        setFormData({
+          ...data,
+          addressLine1: data.addressLine1 || data.address,
+          addressLine2: data.addressLine2 || '',
+          city: data.city || '',
+          district: data.district || '',
+          pinCode: data.pinCode || '',
+          state: data.state || '',
+          // Ensure all document fields are properly set
+          resumeCertificate: data.resumeCertificate || '',
+          highestQualificationCertificate: data.highestQualificationCertificate || '',
+          panCard: data.panCard || '',
+          aadharCard: data.aadharCard || '',
+        });
+      })
+      .catch((err) => setError(err.message || 'Failed to load staff'))
+      .finally(() => setLoading(false));
+  }, [params.id]);
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (field === 'address') setFormData(prev => ({ ...prev, addressLine1: value }));
+  };
+
+  const handleDocumentChange = (field, file) => {
+    setFormData(prev => ({ ...prev, [field]: file }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const payload = {
+        ...formData,
+        addressLine1: formData.addressLine1 || formData.address,
+        addressLine2: formData.addressLine2,
+        city: formData.city,
+        district: formData.district,
+        pinCode: formData.pinCode,
+        state: formData.state,
+      };
+      
+      // If you need to handle file uploads separately, do it here
+      // For now, we're including the file names/paths in the payload
+      
+      await updateStaff(params.id, payload);
+      router.push('/staff');
+    } catch (err) {
+      setError(err.message || 'Failed to update staff');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancel = () => router.back();
+
+  if (loading) {
+    return (
+      <div className="content-area" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+        <CircularProgress />
+      </div>
+    );
+  }
+
+  return (
+    <div className="content-area">
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+      <form onSubmit={handleSubmit}>
+        <Grid container spacing={3}>
+          {/* Personal Details */}
+          <Grid size={{ xs: 12 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ marginBottom: 2, color: '#1976d2', fontWeight: 'bold' }}>
+                  Personal Details
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Staff Name *"
+                      value={formData.staffName}
+                      onChange={(e) => handleInputChange('staffName', e.target.value)}
+                      required
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <FormControl fullWidth>
+                      <FormLabel component="legend">Gender *</FormLabel>
+                      <RadioGroup
+                        row
+                        value={formData.gender}
+                        onChange={(e) => handleInputChange('gender', e.target.value)}
+                      >
+                        <FormControlLabel value="Male" control={<Radio />} label="Male" />
+                        <FormControlLabel value="Female" control={<Radio />} label="Female" />
+                        <FormControlLabel value="Others" control={<Radio />} label="Others" />
+                      </RadioGroup>
+                    </FormControl>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Date of Birth *"
+                      type="date"
+                      value={formData.dob}
+                      onChange={(e) => handleInputChange('dob', e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                      required
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Mobile Number *"
+                      value={formData.mobileNo}
+                      onChange={(e) => handleInputChange('mobileNo', e.target.value)}
+                      required
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Email ID *"
+                      type="email"
+                      value={formData.emailId}
+                      onChange={(e) => handleInputChange('emailId', e.target.value)}
+                      required
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Qualification"
+                      value={formData.qualification}
+                      onChange={(e) => handleInputChange('qualification', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Experience"
+                      value={formData.experience}
+                      onChange={(e) => handleInputChange('experience', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      fullWidth
+                      label="Address Line 1 *"
+                      value={formData.addressLine1 || formData.address}
+                      onChange={(e) => handleInputChange('addressLine1', e.target.value)}
+                      required
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      fullWidth
+                      label="Address Line 2"
+                      value={formData.addressLine2}
+                      onChange={(e) => handleInputChange('addressLine2', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      fullWidth
+                      label="City *"
+                      value={formData.city}
+                      onChange={(e) => handleInputChange('city', e.target.value)}
+                      required
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      fullWidth
+                      label="District *"
+                      value={formData.district}
+                      onChange={(e) => handleInputChange('district', e.target.value)}
+                      required
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      fullWidth
+                      label="Pin Code *"
+                      value={formData.pinCode}
+                      onChange={(e) => handleInputChange('pinCode', e.target.value)}
+                      required
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="State *"
+                      value={formData.state}
+                      onChange={(e) => handleInputChange('state', e.target.value)}
+                      required
+                    />
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Company Details */}
+          <Grid size={{ xs: 12 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ marginBottom: 2, color: '#1976d2', fontWeight: 'bold' }}>
+                  Company Details
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <FormControl fullWidth>
+                      <InputLabel>Branch Name *</InputLabel>
+                      <Select
+                        value={formData.branchName}
+                        onChange={(e) => handleInputChange('branchName', e.target.value)}
+                        label="Branch Name *"
+                        required
+                      >
+                        {BRANCHES.map((b) => <MenuItem key={b} value={b}>{b}</MenuItem>)}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Designation *"
+                      value={formData.designation}
+                      onChange={(e) => handleInputChange('designation', e.target.value)}
+                      required
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <FormControl fullWidth>
+                      <InputLabel>Department *</InputLabel>
+                      <Select
+                        value={formData.department}
+                        onChange={(e) => handleInputChange('department', e.target.value)}
+                        label="Department *"
+                        required
+                      >
+                        {DEPARTMENTS.map((d) => <MenuItem key={d} value={d}>{d}</MenuItem>)}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <FormControl fullWidth>
+                      <InputLabel>Role *</InputLabel>
+                      <Select
+                        value={formData.role}
+                        onChange={(e) => handleInputChange('role', e.target.value)}
+                        label="Role *"
+                        required
+                      >
+                        {ROLES.map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <FormControl fullWidth>
+                      <InputLabel>Warehouse</InputLabel>
+                      <Select
+                        value={formData.warehouse}
+                        onChange={(e) => handleInputChange('warehouse', e.target.value)}
+                        label="Warehouse"
+                      >
+                        <MenuItem value="">None</MenuItem>
+                        {warehouses.map((w) => (
+                          <MenuItem key={w._id} value={w.name || w.warehouseName || w._id}>
+                            {w.name || w.warehouseName || w._id}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Salary *"
+                      type="number"
+                      value={formData.salary}
+                      onChange={(e) => handleInputChange('salary', e.target.value)}
+                      required
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Joining Date *"
+                      type="date"
+                      value={formData.joiningDate}
+                      onChange={(e) => handleInputChange('joiningDate', e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                      required
+                    />
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Documents */}
+          <Grid size={{ xs: 12 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ marginBottom: 2, color: '#1976d2', fontWeight: 'bold' }}>
+                  Document Details
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <DocumentUpload
+                      label="Highest Qualification Certificate"
+                      value={formData.highestQualificationCertificate}
+                      onChange={(file) => handleDocumentChange('highestQualificationCertificate', file)}
+                      fieldName="highestQualificationCertificate"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <DocumentUpload
+                      label="Aadhar Card"
+                      value={formData.aadharCard}
+                      onChange={(file) => handleDocumentChange('aadharCard', file)}
+                      fieldName="aadharCard"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <DocumentUpload
+                      label="Pan Card"
+                      value={formData.panCard}
+                      onChange={(file) => handleDocumentChange('panCard', file)}
+                      fieldName="panCard"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <DocumentUpload
+                      label="Resume Certificate"
+                      value={formData.resumeCertificate}
+                      onChange={(file) => handleDocumentChange('resumeCertificate', file)}
+                      fieldName="resumeCertificate"
+                    />
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Bank Details */}
+          <Grid size={{ xs: 12 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" sx={{ marginBottom: 2, color: '#1976d2', fontWeight: 'bold' }}>
+                  Bank Details
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Account Holder Name"
+                      value={formData.accountHolderName}
+                      onChange={(e) => handleInputChange('accountHolderName', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Account Number"
+                      value={formData.accountNumber}
+                      onChange={(e) => handleInputChange('accountNumber', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Bank Name"
+                      value={formData.bankName}
+                      onChange={(e) => handleInputChange('bankName', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="IFSC Code"
+                      value={formData.ifscCode}
+                      onChange={(e) => handleInputChange('ifscCode', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Bank Branch"
+                      value={formData.bankBranch}
+                      onChange={(e) => handleInputChange('bankBranch', e.target.value)}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Branch Location"
+                      value={formData.branchLocation}
+                      onChange={(e) => handleInputChange('branchLocation', e.target.value)}
+                    />
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Action Buttons */}
+          <Grid size={{ xs: 12 }}>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', marginTop: 2 }}>
+              <Button
+                variant="outlined"
+                onClick={handleCancel}
+                sx={{ minWidth: 120, transform: 'none', textTransform: 'none' }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={submitting}
+                sx={{ minWidth: 120, transform: 'none', textTransform: 'none' }}
+              >
+                {submitting ? <CircularProgress size={24} /> : 'Update Staff'}
+              </Button>
+            </Box>
+          </Grid>
+        </Grid>
+      </form>
+    </div>
+  );
+};
+
+export default EditStaff;
