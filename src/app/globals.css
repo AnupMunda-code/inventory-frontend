@@ -464,6 +464,18 @@ body {
   color: var(--text-secondary);
 }
 
+/* Dashboard cards: subtle lift + shadow on hover for an interactive feel */
+.dashboard-stat-card,
+.dashboard-action-card {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.dashboard-stat-card:hover,
+.dashboard-action-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 20px -6px rgba(0, 0, 0, 0.15);
+  border-color: var(--primary-blue-light);
+}
+
 .hrms-form-group {
   margin-bottom: 1.5rem;
 }
