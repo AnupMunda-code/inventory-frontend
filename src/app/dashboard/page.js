@@ -25,6 +25,19 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 import { fetchWithAuth } from '../../lib/api';
 
@@ -55,12 +68,17 @@ const QUICK_ACTIONS = [
   { label: 'View Reports', icon: AssessmentOutlinedIcon, href: '/reports/summary', color: '#7E57C2' },
 ];
 
+// Colors for the stock-status donut: In Stock (green), Low (orange), Out (red).
+const STOCK_STATUS_COLORS = ['#4CAF50', '#FF9800', '#F44336'];
+
 const Dashboard = () => {
   const { admin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState({});
   const [lowStockItems, setLowStockItems] = useState([]);
   const [recentProducts, setRecentProducts] = useState([]);
+  const [stockStatusData, setStockStatusData] = useState([]);
+  const [topProductsData, setTopProductsData] = useState([]);
 
   useEffect(() => {
     let active = true;
@@ -85,6 +103,34 @@ const Dashboard = () => {
       });
       setLowStockItems(lowStock.slice(0, 5));
       setRecentProducts(products.slice(0, 5));
+
+      // Stock status breakdown (donut): out of stock / low / healthy.
+      let outOfStock = 0;
+      let low = 0;
+      let healthy = 0;
+      products.forEach((p) => {
+        const stock = Number(p.stock) || 0;
+        const min = Number(p.minStock) || 0;
+        if (stock <= 0) outOfStock += 1;
+        else if (stock <= min) low += 1;
+        else healthy += 1;
+      });
+      setStockStatusData([
+        { name: 'In Stock', value: healthy },
+        { name: 'Low Stock', value: low },
+        { name: 'Out of Stock', value: outOfStock },
+      ]);
+
+      // Top products by stock quantity (bar).
+      const top = [...products]
+        .sort((a, b) => (Number(b.stock) || 0) - (Number(a.stock) || 0))
+        .slice(0, 6)
+        .map((p) => ({
+          name: (p.productName || p.name || '—').slice(0, 14),
+          stock: Number(p.stock) || 0,
+        }));
+      setTopProductsData(top);
+
       setLoading(false);
     })();
     return () => {
@@ -182,6 +228,80 @@ const Dashboard = () => {
             </Grid>
           );
         })}
+      </Grid>
+
+      {/* Charts row */}
+      <Grid container spacing={2} sx={{ mt: 0.5 }}>
+        {/* Stock status donut */}
+        <Grid size={{ xs: 12, md: 5 }}>
+          <Box className="hrms-card" sx={{ mb: 0, height: '100%' }}>
+            <Box className="hrms-card-header">
+              <Typography className="hrms-card-title" sx={{ fontSize: '1.05rem' }}>
+                Stock Status
+              </Typography>
+            </Box>
+            <Box className="hrms-card-content" sx={{ height: 300 }}>
+              {loading ? (
+                <Skeleton variant="rounded" width="100%" height={260} />
+              ) : stockStatusData.every((d) => d.value === 0) ? (
+                <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#757575' }}>
+                  <Typography sx={{ fontSize: '0.9rem' }}>No product data to chart yet.</Typography>
+                </Box>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={stockStatusData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={90}
+                      paddingAngle={2}
+                    >
+                      {stockStatusData.map((entry, i) => (
+                        <Cell key={entry.name} fill={STOCK_STATUS_COLORS[i]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend verticalAlign="bottom" height={36} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </Box>
+          </Box>
+        </Grid>
+
+        {/* Top products by stock (bar) */}
+        <Grid size={{ xs: 12, md: 7 }}>
+          <Box className="hrms-card" sx={{ mb: 0, height: '100%' }}>
+            <Box className="hrms-card-header">
+              <Typography className="hrms-card-title" sx={{ fontSize: '1.05rem' }}>
+                Top Products by Stock
+              </Typography>
+            </Box>
+            <Box className="hrms-card-content" sx={{ height: 300 }}>
+              {loading ? (
+                <Skeleton variant="rounded" width="100%" height={260} />
+              ) : topProductsData.length === 0 ? (
+                <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#757575' }}>
+                  <Typography sx={{ fontSize: '0.9rem' }}>No product data to chart yet.</Typography>
+                </Box>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topProductsData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#757575' }} interval={0} />
+                    <YAxis tick={{ fontSize: 11, fill: '#757575' }} allowDecimals={false} />
+                    <Tooltip cursor={{ fill: 'rgba(25,118,210,0.06)' }} />
+                    <Bar dataKey="stock" fill="#1976D2" radius={[6, 6, 0, 0]} maxBarSize={48} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </Box>
+          </Box>
+        </Grid>
       </Grid>
 
       <Grid container spacing={2} sx={{ mt: 0.5 }}>
